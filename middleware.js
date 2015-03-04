@@ -14,7 +14,7 @@ var imports = {};
  *
  *    `force`       Always re-compile
  *    `debug`       Output debugging information
- *    `src`         Source directory used to find .scss files
+ *    `src`         Source directory used to find .scss and / or .sass files
  *    `dest`        Destination directory used to output .css files
  *                  when undefined defaults to `src`.
  *    `outputStyle` Sass output style (nested,expanded, compact or compressed)
@@ -22,7 +22,7 @@ var imports = {};
  *
  * Examples:
  *
- * Pass the middleware to Connect, grabbing .scss files from this directory
+ * Pass the middleware to Connect, grabbing .scss and .sass files from this directory
  * and saving .css files to _./public_.
  *
  * Following that we have a `staticProvider` layer setup to serve the .css
@@ -77,15 +77,31 @@ module.exports = function(options){
       path = path.substring(options.prefix.length);
     }
     if (/\.css$/.test(path)) {
+      var isFileReadable = function(path) {
+        if(typeof(fs.accessSync) !== 'undefined') {
+          return fs.accessSync(path);
+        } else {
+          return fs.existsSync(path);
+        }
+      }
+      // Get the current SCSS or SASS file matching the path
+      var getSCSSorSASS = function(path) {
+        if(isFileReadable(path + '.scss')) {
+          return path + '.scss';
+        } else if (isFileReadable(path + '.sass')) {
+          return path + '.sass';
+        }
+      }
+
       var cssPath = join(dest, path),
-          sassPath = join(src, path.replace('.css', '.scss')),
+          sassPath = getSCSSorSASS(join(src, path.replace('.css', ''))),
           sassDir = dirname(sassPath);
 
       if (root) {
         cssPath = join(root, dest, path.replace(dest, ''));
-        sassPath = join(root, src, path
+        sassPath = getSCSSorSASS(join(root, src, path
             .replace(dest, '')
-            .replace('.css', '.scss'));
+            .replace('.css', '')));
         sassDir = dirname(sassPath);
       }
 
@@ -110,6 +126,7 @@ module.exports = function(options){
           delete imports[sassPath];
           style.render({
             data: str,
+            indentedSyntax: /\.sass$/.test(sassPath),
             success: function(result){
               if (debug) { log('render', options.response ? '<response>' : sassPath); }
               imports[sassPath] = result.includedFiles;
